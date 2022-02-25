@@ -28,13 +28,24 @@ use Cake\ORM\Locator\TableLocator;
 use Cake\Routing\Middleware\AssetMiddleware;
 use Cake\Routing\Middleware\RoutingMiddleware;
 
+// I added the the following code.
+
+use Authentication\AuthenticationService;
+use Authentication\AuthenticationServiceInterface;
+use Authentication\AuthenticationServiceProviderInterface;
+use Authentication\Identifier\IdentifierInterface;
+use Authentication\Middleware\AuthenticationMiddleware;
+// use Cake\Http\MiddlewareQueue;
+use Cake\Routing\Router;
+use Psr\Http\Message\ServerRequestInterface;
+
 /**
  * Application setup class.
  *
  * This defines the bootstrapping logic and middleware layers you
  * want to use in your application.
  */
-class Application extends BaseApplication
+class Application extends BaseApplication implements AuthenticationServiceProviderInterface
 {
     /**
      * Load all the application configuration and bootstrap logic.
@@ -45,6 +56,9 @@ class Application extends BaseApplication
     {
         // Call parent to load bootstrap from files.
         parent::bootstrap();
+        // Hier I added the Authentication Plugin
+        $this->addPlugin('Authentication');
+
 
         if (PHP_SAPI === 'cli') {
             $this->bootstrapCli();
@@ -78,6 +92,8 @@ class Application extends BaseApplication
             // Catch any exceptions in the lower layers,
             // and make an error page/response
             ->add(new ErrorHandlerMiddleware(Configure::read('Error')))
+            ->add(new RoutingMiddleware($this))
+
 
             // Handle plugin/theme assets like CakePHP normally does.
             ->add(new AssetMiddleware([
@@ -91,6 +107,8 @@ class Application extends BaseApplication
             // using it's second constructor argument:
             // `new RoutingMiddleware($this, '_cake_routes_')`
             ->add(new RoutingMiddleware($this))
+            ->add(new AuthenticationMiddleware($this))
+
 
             // Parse various types of encoded request bodies so that they are
             // available as array through $request->getData()
@@ -104,6 +122,43 @@ class Application extends BaseApplication
             ]));
 
         return $middlewareQueue;
+    }
+
+    public function getAuthenticationService(ServerRequestInterface $request): AuthenticationServiceInterface
+    {
+        $authenticationService = new AuthenticationService([
+        'unauthenticatedRedirect' => Router::url([
+            'prefix' => 'Admin',
+            'conrtoller' => 'Users',
+            'action' => 'Login'
+        ]),
+        'queryParam' => 'redirect',
+    ]);
+
+        // Load identifiers, ensure we check email and password fields
+        $authenticationService->loadIdentifier('Authentication.Password', [
+        'fields' => [
+            'username' => 'email',
+            'password' => 'password',
+        ]
+    ]);
+
+        // Load the authenticators, you want session first
+        $authenticationService->loadAuthenticator('Authentication.Session');
+        // Configure form data check to pick email and password
+        $authenticationService->loadAuthenticator('Authentication.Form', [
+        'fields' => [
+            'username' => 'email',
+            'password' => 'password',
+        ],
+        'loginUrl' => Router::url([
+            'prefix' => 'Admin',
+            'conrtoller' => 'Users',
+            'action' => 'Login'
+        ]),
+    ]);
+
+        return $authenticationService;
     }
 
     /**
