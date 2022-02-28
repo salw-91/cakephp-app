@@ -68,6 +68,7 @@ class UsersController extends AppController
      */
     public function add()
     {
+        die('add');
         $user = $this->Users->newEmptyEntity();
         if ($this->request->is('post')) {
             $user = $this->Users->patchEntity($user, $this->request->getData());
